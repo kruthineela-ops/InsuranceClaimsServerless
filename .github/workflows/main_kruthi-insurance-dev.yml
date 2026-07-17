@@ -1,7 +1,4 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/azure/functions-action
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
-name: Build and deploy dotnet core app to Azure Function App - kruthi-insurance-dev
+name: Build and deploy .NET Azure Function - kruthi-insurance-dev
 
 on:
   push:
@@ -10,44 +7,56 @@ on:
   workflow_dispatch:
 
 env:
-AZURE_FUNCTIONAPP_PACKAGE_PATH: './InsuranceClaims.Functions'
-DOTNET_VERSION: '8.0.x' # set this to the dotnet version to use
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: './InsuranceClaims.Functions'
+  DOTNET_VERSION: '8.0.x'
 
 jobs:
   build-and-deploy:
     runs-on: windows-latest
+
     permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
+      id-token: write
+      contents: read
 
     steps:
-      - name: 'Checkout GitHub Action'
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v5
 
-      - name: Setup DotNet ${{ env.DOTNET_VERSION }} Environment
-        uses: actions/setup-dotnet@v1
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: 'Resolve Project Dependencies Using Dotnet'
-        shell: pwsh
-        run: |
-          pushd './${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}'
-          dotnet build --configuration Release --output ./output
-          popd
-      
-      - name: Login to Azure
+      - name: Restore dependencies
+        run: >
+          dotnet restore
+          "${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/InsuranceClaims.Functions.csproj"
+
+      - name: Build function
+        run: >
+          dotnet build
+          "${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/InsuranceClaims.Functions.csproj"
+          --configuration Release
+          --no-restore
+
+      - name: Publish function
+        run: >
+          dotnet publish
+          "${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/InsuranceClaims.Functions.csproj"
+          --configuration Release
+          --no-build
+          --output "${{ github.workspace }}/published"
+
+      - name: Log in to Azure
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_E92D20E759E443A38D828A4867B0D9A3 }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_320C292FB06F40588A9EDB29E6380A51 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_48994F3EA2844CBC812A1F1AB65DCBA1 }}
 
-      - name: 'Run Azure Functions Action'
+      - name: Deploy Azure Function
         uses: Azure/functions-action@v1
-        id: fa
         with:
           app-name: 'kruthi-insurance-dev'
           slot-name: 'Production'
-          package: '${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/output'
-          
+          package: '${{ github.workspace }}/published'
